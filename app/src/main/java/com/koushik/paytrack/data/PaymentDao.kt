@@ -31,4 +31,13 @@ interface PaymentDao {
 
     @Query("UPDATE payment_transactions SET category = :newCategory WHERE id = :id")
     suspend fun updateTransactionCategory(id: Long, newCategory: Category)
+
+    @Insert
+    suspend fun insertPendingSync(pendingSync: PendingSync)
+
+    @Query("SELECT * FROM pending_syncs ORDER BY createdAt ASC")
+    suspend fun getPendingSyncs(): List<PendingSync>
+
+    @Query("DELETE FROM pending_syncs WHERE id = :id")
+    suspend fun deletePendingSync(id: Long)
 }

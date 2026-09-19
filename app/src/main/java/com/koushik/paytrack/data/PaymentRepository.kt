@@ -36,9 +36,8 @@ class PaymentRepository(context: Context) {
         val base = existing ?: DailySummary(dateKey = dateKey, displayDate = DateKeys.displayFor(date))
         dao.upsertSummary(base.withAdded(category, amount))
 
-        withContext(Dispatchers.IO) {
-            SheetSyncClient.pushDelta(DateKeys.displayFor(date), category, amount)
-        }
+        pushOrQueue(DateKeys.displayFor(date), category, amount)
+        retryPendingSyncs()
     }
 
     /** Moves a transaction to a different category, adjusting both the local cache and the sheet. */
@@ -57,9 +56,35 @@ class PaymentRepository(context: Context) {
         }
 
         val displayDate = DateKeys.displayFor(Date(transaction.postedAt))
+        pushOrQueue(displayDate, transaction.category, -transaction.amount)
+        pushOrQueue(displayDate, newCategory, transaction.amount)
+        retryPendingSyncs()
+    }
+
+    /** Retries any sheet deltas that failed to send earlier (e.g. no network at the time). */
+    suspend fun retryPendingSyncs() {
+        val pending = dao.getPendingSyncs()
+        if (pending.isEmpty()) return
+
         withContext(Dispatchers.IO) {
-            SheetSyncClient.pushDelta(displayDate, transaction.category, -transaction.amount)
-            SheetSyncClient.pushDelta(displayDate, newCategory, transaction.amount)
+            for (sync in pending) {
+                val success = SheetSyncClient.pushDelta(sync.displayDate, sync.category, sync.amount)
+                if (success) dao.deletePendingSync(sync.id)
+            }
+        }
+    }
+
+    private suspend fun pushOrQueue(displayDate: String, category: Category, amount: Double) {
+        val success = withContext(Dispatchers.IO) { SheetSyncClient.pushDelta(displayDate, category, amount) }
+        if (!success) {
+            dao.insertPendingSync(
+                PendingSync(
+                    displayDate = displayDate,
+                    category = category,
+                    amount = amount,
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
         }
     }
 }

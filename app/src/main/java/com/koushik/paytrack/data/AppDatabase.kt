@@ -7,8 +7,8 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [PaymentTransaction::class, DailySummary::class],
-    version = 2,
+    entities = [PaymentTransaction::class, DailySummary::class, PendingSync::class],
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

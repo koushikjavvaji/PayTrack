@@ -16,10 +16,11 @@ import java.net.URL
 object SheetSyncClient {
     private const val TAG = "PayTrack"
 
-    fun pushDelta(displayDate: String, category: Category, amount: Double) {
-        if (BuildConfig.SHEET_SYNC_URL.isBlank()) return
+    /** Returns true if the push succeeded (or sync isn't configured, so there's nothing to retry). */
+    fun pushDelta(displayDate: String, category: Category, amount: Double): Boolean {
+        if (BuildConfig.SHEET_SYNC_URL.isBlank()) return true
 
-        try {
+        return try {
             val payload = JSONObject().apply {
                 put("displayDate", displayDate)
                 put("category", category.sheetKey)
@@ -40,11 +41,14 @@ object SheetSyncClient {
             val code = connection.responseCode
             connection.disconnect()
 
-            if (code !in 200..399) {
+            val success = code in 200..399
+            if (!success) {
                 Log.w(TAG, "Sheet sync failed for $displayDate/${category.sheetKey}: HTTP $code")
             }
+            success
         } catch (e: Exception) {
             Log.w(TAG, "Sheet sync error for $displayDate/${category.sheetKey}", e)
+            false
         }
     }
 }

@@ -33,6 +33,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.d(TAG, "Notification listener connected")
+        serviceScope.launch { repository.retryPendingSyncs() }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
