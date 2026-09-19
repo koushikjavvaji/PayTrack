@@ -11,7 +11,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,7 +34,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.koushik.paytrack.data.AppPreferences
 import com.koushik.paytrack.data.DailySummary
 import com.koushik.paytrack.data.PaymentRepository
 import com.koushik.paytrack.ui.theme.PayTrackTheme
@@ -82,9 +79,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     }
 
     val repository = remember { PaymentRepository(context) }
-    val preferences = remember { AppPreferences(context) }
     val summaries by repository.observeSummaries().collectAsState(initial = emptyList())
-    var baselineText by remember { mutableStateOf(preferences.baselineTotal.toString()) }
 
     LazyColumn(
         modifier = modifier
@@ -125,28 +120,6 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
         item {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text(
-                text = "Starting total (from before this app began tracking)",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = baselineText,
-                    onValueChange = { baselineText = it },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
-                Spacer(modifier = Modifier.padding(4.dp))
-                Button(onClick = {
-                    baselineText.toDoubleOrNull()?.let { preferences.baselineTotal = it }
-                }) {
-                    Text("Save")
-                }
-            }
-        }
-
-        item {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(text = "Recent days", style = MaterialTheme.typography.titleMedium)
         }
 
@@ -174,14 +147,11 @@ private fun PermissionRow(
 
 @Composable
 private fun DailySummaryRow(summary: DailySummary) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = summary.displayDate, style = MaterialTheme.typography.bodyLarge)
-            Text(text = "₹${"%.2f".format(summary.total)}", style = MaterialTheme.typography.bodyLarge)
-        }
-        Text(
-            text = "Till date: ₹${"%.2f".format(summary.totalSpentTillDate)}",
-            style = MaterialTheme.typography.bodySmall,
-        )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = summary.displayDate, style = MaterialTheme.typography.bodyLarge)
+        Text(text = "₹${"%.2f".format(summary.total)}", style = MaterialTheme.typography.bodyLarge)
     }
 }

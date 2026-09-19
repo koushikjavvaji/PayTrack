@@ -1,16 +1,22 @@
 package com.koushik.paytrack.data
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Date
 
 class PaymentRepository(context: Context) {
     private val dao = AppDatabase.get(context).paymentDao()
-    private val prefs = AppPreferences(context)
 
     fun observeSummaries() = dao.observeSummaries()
     fun observeRecentTransactions() = dao.observeRecentTransactions()
 
-    /** Does today's row exist? Add to it; otherwise create it. Then roll the running total forward. */
+    /**
+     * Saves the transaction locally (audit trail + offline-safe record), updates today's local
+     * cache for the app's own UI, then pushes just the delta to the sheet — the sheet script
+     * does its own read-add-write against the real row, using its full month history to compute
+     * the month-to-date total, since the phone never has that history.
+     */
     suspend fun recordPayment(amount: Double, merchant: String?, app: String, category: Category, postedAt: Long) {
         val date = Date(postedAt)
         val dateKey = DateKeys.keyFor(date)
@@ -28,9 +34,10 @@ class PaymentRepository(context: Context) {
 
         val existing = dao.getSummary(dateKey)
         val base = existing ?: DailySummary(dateKey = dateKey, displayDate = DateKeys.displayFor(date))
-        val updated = base.withAdded(category, amount)
+        dao.upsertSummary(base.withAdded(category, amount))
 
-        val previousTotal = dao.getLatestSummaryBefore(dateKey)?.totalSpentTillDate ?: prefs.baselineTotal
-        dao.upsertSummary(updated.copy(totalSpentTillDate = previousTotal + updated.total))
+        withContext(Dispatchers.IO) {
+            SheetSyncClient.pushDelta(DateKeys.displayFor(date), category, amount)
+        }
     }
 }

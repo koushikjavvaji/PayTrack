@@ -17,6 +17,9 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var repository: PaymentRepository
 
+    /** Same payment can be reported by both the payment app and the bank SMS; drop the second. */
+    private val recentAmounts = ArrayDeque<Pair<Double, Long>>()
+
     override fun onCreate() {
         super.onCreate()
         repository = PaymentRepository(applicationContext)
@@ -36,26 +39,33 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         super.onNotificationPosted(sbn)
 
         val packageName = sbn.packageName
-        if (packageName !in PaymentApps.PACKAGE_NAMES) return
+        Log.v(TAG, "Notification posted from $packageName")
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString()
 
-        Log.d(TAG, "Notification from $packageName -> title=\"$title\" text=\"$text\"")
+        val isTrackedSource = packageName in PaymentApps.PACKAGE_NAMES ||
+            packageName in MessagingApps.PACKAGE_NAMES ||
+            packageName in EmailApps.PACKAGE_NAMES
+        if (isTrackedSource) {
+            Log.d(TAG, "Notification from $packageName -> title=\"$title\" text=\"$text\"")
+        }
 
-        val payment = PaymentNotificationParser.parse(
-            packageName = packageName,
-            title = title,
-            text = text,
-            key = sbn.key,
-            postedAt = sbn.postTime,
-        ) ?: return
+        val payment = when (packageName) {
+            in PaymentApps.PACKAGE_NAMES ->
+                PaymentNotificationParser.parse(packageName, title, text, sbn.key, sbn.postTime)
+            in MessagingApps.PACKAGE_NAMES ->
+                BankSmsParser.parse(packageName, title, text, sbn.key, sbn.postTime)
+            in EmailApps.PACKAGE_NAMES ->
+                BankEmailParser.parse(packageName, title, text, sbn.key, sbn.postTime)
+            else -> null
+        } ?: return
 
         val amount = payment.amount
         Log.i(TAG, "Detected payment: app=${payment.app} amount=$amount merchant=${payment.merchant}")
-        if (amount == null) return
+        if (amount == null || isDuplicate(amount)) return
 
         PaymentPopupOverlay.show(applicationContext, payment) { category ->
             if (category == null) return@show
@@ -71,11 +81,22 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         }
     }
 
+    private fun isDuplicate(amount: Double): Boolean {
+        val now = System.currentTimeMillis()
+        while (recentAmounts.isNotEmpty() && now - recentAmounts.first().second > DEDUP_WINDOW_MS) {
+            recentAmounts.removeFirst()
+        }
+        val isDuplicate = recentAmounts.any { it.first == amount }
+        if (!isDuplicate) recentAmounts.addLast(amount to now)
+        return isDuplicate
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
     }
 
     companion object {
         private const val TAG = "PayTrack"
+        private const val DEDUP_WINDOW_MS = 20_000L
     }
 }

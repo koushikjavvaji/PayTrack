@@ -3,7 +3,11 @@ package com.koushik.paytrack.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-/** One row of the Google Sheet: a day's spend broken down by category, plus running totals. */
+/**
+ * A day's spend broken down by category — a local, best-effort mirror of that day so far.
+ * The month-to-date running total lives only in the Google Sheet, computed there from the full
+ * month's history (which this local cache never has), not tracked here.
+ */
 @Entity(tableName = "daily_summaries")
 data class DailySummary(
     @PrimaryKey val dateKey: String,
@@ -15,7 +19,6 @@ data class DailySummary(
     val travel: Double = 0.0,
     val otherExpenses: Double = 0.0,
     val total: Double = 0.0,
-    val totalSpentTillDate: Double = 0.0,
 ) {
     fun amountFor(category: Category): Double = when (category) {
         Category.BREAKFAST -> breakfast
