@@ -40,4 +40,26 @@ class PaymentRepository(context: Context) {
             SheetSyncClient.pushDelta(DateKeys.displayFor(date), category, amount)
         }
     }
+
+    /** Moves a transaction to a different category, adjusting both the local cache and the sheet. */
+    suspend fun correctCategory(transactionId: Long, newCategory: Category) {
+        val transaction = dao.getTransaction(transactionId) ?: return
+        if (transaction.category == newCategory) return
+
+        dao.updateTransactionCategory(transactionId, newCategory)
+
+        val existing = dao.getSummary(transaction.dateKey)
+        if (existing != null) {
+            val adjusted = existing
+                .withAdded(transaction.category, -transaction.amount)
+                .withAdded(newCategory, transaction.amount)
+            dao.upsertSummary(adjusted)
+        }
+
+        val displayDate = DateKeys.displayFor(Date(transaction.postedAt))
+        withContext(Dispatchers.IO) {
+            SheetSyncClient.pushDelta(displayDate, transaction.category, -transaction.amount)
+            SheetSyncClient.pushDelta(displayDate, newCategory, transaction.amount)
+        }
+    }
 }

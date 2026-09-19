@@ -34,7 +34,7 @@ function doPost(e) {
     .reduce((a, b) => a + b, 0);
   sheet.getRange(rowIndex, TOTAL_COLUMN).setValue(rowTotal);
 
-  const monthToDate = computeMonthToDateTotal(sheet, rowIndex);
+  const monthToDate = computeMonthToDateTotal(sheet, rowIndex, rowTotal);
   sheet.getRange(rowIndex, TOTAL_SPENT_TILL_DATE_COLUMN).setValue(monthToDate);
 
   return ContentService.createTextOutput(JSON.stringify({ ok: true, row: rowIndex, total: rowTotal, monthToDate }))
@@ -57,11 +57,13 @@ function findRowForDate(sheet, displayDate) {
 // Sums the Total column from the start of the current month through rowIndex, scanning
 // backward until the month name changes or a blank date cell is hit. This is recomputed from
 // scratch every time rather than chained from the previous row's stored value, since the sheet
-// has months of history where that column was never filled in.
-function computeMonthToDateTotal(sheet, rowIndex) {
+// has months of history where that column was never filled in. currentRowTotal is passed in
+// directly rather than read back from the sheet, since Sheets batches writes internally and a
+// getValue() right after setValue() on the same row can still return the pre-write value.
+function computeMonthToDateTotal(sheet, rowIndex, currentRowTotal) {
   const currentMonth = extractMonth(sheet.getRange(rowIndex, 1).getValue());
-  let sum = 0;
-  for (let r = rowIndex; r >= 2; r--) {
+  let sum = currentRowTotal;
+  for (let r = rowIndex - 1; r >= 2; r--) {
     const dateValue = sheet.getRange(r, 1).getValue();
     if (!dateValue || extractMonth(dateValue) !== currentMonth) break;
     sum += Number(sheet.getRange(r, TOTAL_COLUMN).getValue()) || 0;

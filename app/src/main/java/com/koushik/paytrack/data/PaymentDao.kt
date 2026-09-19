@@ -25,4 +25,10 @@ interface PaymentDao {
 
     @Query("SELECT * FROM payment_transactions ORDER BY postedAt DESC LIMIT 50")
     fun observeRecentTransactions(): Flow<List<PaymentTransaction>>
+
+    @Query("SELECT * FROM payment_transactions WHERE id = :id LIMIT 1")
+    suspend fun getTransaction(id: Long): PaymentTransaction?
+
+    @Query("UPDATE payment_transactions SET category = :newCategory WHERE id = :id")
+    suspend fun updateTransactionCategory(id: Long, newCategory: Category)
 }
