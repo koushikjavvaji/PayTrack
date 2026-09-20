@@ -10,6 +10,27 @@ class PaymentRepository(context: Context) {
 
     fun observeSummaries() = dao.observeSummaries()
     fun observeRecentTransactions() = dao.observeRecentTransactions()
+    fun observeBudgets() = dao.observeBudgets()
+
+    /** This month's daily summaries, for computing spend-so-far per category against budgets. */
+    fun observeCurrentMonthSummaries() = dao.observeSummariesForMonth(DateKeys.keyFor(Date()).take(7))
+
+    suspend fun setBudget(category: Category, monthlyLimit: Double) {
+        dao.upsertBudget(Budget(category, monthlyLimit))
+    }
+
+    /** A point-in-time snapshot of this month's spend vs. budget per category, for the payment popup to check "would this push me over?" without an async round-trip mid-animation. */
+    suspend fun getBudgetSnapshot(): Map<Category, CategorySpend> {
+        val budgets = dao.getBudgetsOnce().associateBy { it.category }
+        val monthPrefix = DateKeys.keyFor(Date()).take(7)
+        val summaries = dao.getSummariesForMonthOnce(monthPrefix)
+        return Category.entries.associateWith { category ->
+            CategorySpend(
+                spentSoFar = summaries.sumOf { it.amountFor(category) },
+                limit = budgets[category]?.monthlyLimit,
+            )
+        }
+    }
 
     /**
      * Saves the transaction locally (audit trail + offline-safe record), updates today's local
@@ -58,6 +79,21 @@ class PaymentRepository(context: Context) {
         val displayDate = DateKeys.displayFor(Date(transaction.postedAt))
         pushOrQueue(displayDate, transaction.category, -transaction.amount)
         pushOrQueue(displayDate, newCategory, transaction.amount)
+        retryPendingSyncs()
+    }
+
+    /** Removes a transaction, adjusting both the local cache and the sheet (a negative delta). */
+    suspend fun deleteTransaction(transactionId: Long) {
+        val transaction = dao.getTransaction(transactionId) ?: return
+        dao.deleteTransaction(transactionId)
+
+        val existing = dao.getSummary(transaction.dateKey)
+        if (existing != null) {
+            dao.upsertSummary(existing.withAdded(transaction.category, -transaction.amount))
+        }
+
+        val displayDate = DateKeys.displayFor(Date(transaction.postedAt))
+        pushOrQueue(displayDate, transaction.category, -transaction.amount)
         retryPendingSyncs()
     }
 

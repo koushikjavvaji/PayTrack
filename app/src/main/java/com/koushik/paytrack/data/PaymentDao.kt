@@ -32,6 +32,9 @@ interface PaymentDao {
     @Query("UPDATE payment_transactions SET category = :newCategory WHERE id = :id")
     suspend fun updateTransactionCategory(id: Long, newCategory: Category)
 
+    @Query("DELETE FROM payment_transactions WHERE id = :id")
+    suspend fun deleteTransaction(id: Long)
+
     @Insert
     suspend fun insertPendingSync(pendingSync: PendingSync)
 
@@ -40,4 +43,19 @@ interface PaymentDao {
 
     @Query("DELETE FROM pending_syncs WHERE id = :id")
     suspend fun deletePendingSync(id: Long)
+
+    @Query("SELECT * FROM budgets")
+    fun observeBudgets(): Flow<List<Budget>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBudget(budget: Budget)
+
+    @Query("SELECT * FROM daily_summaries WHERE dateKey LIKE :monthPrefix || '%' ORDER BY dateKey")
+    fun observeSummariesForMonth(monthPrefix: String): Flow<List<DailySummary>>
+
+    @Query("SELECT * FROM budgets")
+    suspend fun getBudgetsOnce(): List<Budget>
+
+    @Query("SELECT * FROM daily_summaries WHERE dateKey LIKE :monthPrefix || '%'")
+    suspend fun getSummariesForMonthOnce(monthPrefix: String): List<DailySummary>
 }

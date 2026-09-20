@@ -13,6 +13,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.koushik.paytrack.data.Category
+import com.koushik.paytrack.data.CategorySpend
 import com.koushik.paytrack.notification.PaymentInfo
 
 object PaymentPopupOverlay {
@@ -20,7 +21,12 @@ object PaymentPopupOverlay {
     fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     /** Adds the category-picker popup as a system overlay window over whatever app is in front. */
-    fun show(context: Context, payment: PaymentInfo, onResult: (Category?) -> Unit) {
+    fun show(
+        context: Context,
+        payment: PaymentInfo,
+        budgetStatus: Map<Category, CategorySpend> = emptyMap(),
+        onResult: (Category?) -> Unit,
+    ) {
         if (!canDrawOverlays(context)) return
 
         val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -47,6 +53,7 @@ object PaymentPopupOverlay {
             override fun Content() {
                 PaymentPopupContent(
                     payment = payment,
+                    budgetStatus = budgetStatus,
                     onCategorySelected = { category -> dismiss(category) },
                     onSkip = { dismiss(null) },
                 )
@@ -67,12 +74,13 @@ object PaymentPopupOverlay {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        // Full-screen so the Compose content can draw its own dimmed scrim behind the card —
+        // this also makes the popup properly modal (taps land on the scrim, not the app below).
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             overlayType,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER

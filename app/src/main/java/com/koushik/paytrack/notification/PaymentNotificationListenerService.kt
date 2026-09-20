@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PaymentNotificationListenerService : NotificationListenerService() {
 
@@ -68,16 +69,21 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         Log.i(TAG, "Detected payment: app=${payment.app} amount=$amount merchant=${payment.merchant}")
         if (amount == null || isDuplicate(amount)) return
 
-        PaymentPopupOverlay.show(applicationContext, payment) { category ->
-            if (category == null) return@show
-            serviceScope.launch {
-                repository.recordPayment(
-                    amount = amount,
-                    merchant = payment.merchant,
-                    app = payment.app,
-                    category = category,
-                    postedAt = payment.postedAt,
-                )
+        serviceScope.launch {
+            val budgetStatus = repository.getBudgetSnapshot()
+            withContext(Dispatchers.Main) {
+                PaymentPopupOverlay.show(applicationContext, payment, budgetStatus) { category ->
+                    if (category == null) return@show
+                    serviceScope.launch {
+                        repository.recordPayment(
+                            amount = amount,
+                            merchant = payment.merchant,
+                            app = payment.app,
+                            category = category,
+                            postedAt = payment.postedAt,
+                        )
+                    }
+                }
             }
         }
     }
