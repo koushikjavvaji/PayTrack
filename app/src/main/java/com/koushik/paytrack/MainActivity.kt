@@ -137,6 +137,7 @@ fun HomeScreen() {
     var showAddDialog by remember { mutableStateOf(false) }
     var showBudgetDialog by remember { mutableStateOf(false) }
     var correctingTransaction by remember { mutableStateOf<PaymentTransaction?>(null) }
+    var showAllTransactions by remember { mutableStateOf(false) }
 
     LaunchedEffect(repository) { repository.retryPendingSyncs() }
 
@@ -251,15 +252,25 @@ fun HomeScreen() {
                     if (transactions.isEmpty()) {
                         EmptyRow("No transactions yet")
                     } else {
+                        val visibleTransactions = if (showAllTransactions) transactions else transactions.take(5)
                         Column {
-                            transactions.forEachIndexed { index, transaction ->
+                            visibleTransactions.forEachIndexed { index, transaction ->
                                 SwipeableTransactionRow(
                                     transaction = transaction,
                                     onClick = { correctingTransaction = transaction },
                                     onDelete = { deleteWithUndo(transaction) },
                                 )
-                                if (index != transactions.lastIndex) {
+                                if (index != visibleTransactions.lastIndex) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                            }
+                            if (transactions.size > 5) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                TextButton(
+                                    onClick = { showAllTransactions = !showAllTransactions },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(if (showAllTransactions) "See less" else "See more")
                                 }
                             }
                         }
